@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>TouchGrass AI</title>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<div id="aiInfoModal" class="ai-modal hidden">
+
+    <div class="ai-modal-card">
+
+        <button
+            id="closeAiModal"
+            class="ai-modal-close"
+        >
+            ×
+        </button>
+
+        <div class="ai-modal-icon">
+            🤖
+        </div>
+
+        <p class="label">
+            OPEN AI, LOCALLY
+        </p>
+
+        <h2>
+            Your AI stays on your machine.
+        </h2>
+
+        <p>
+            TouchGrass AI uses an open-weight model
+            running locally through Ollama.
+        </p>
+
+        <div class="ai-info-list">
+
+            <div>
+                <strong>Model</strong>
+                <span>Qwen 2.5 · 0.5B</span>
+            </div>
+
+            <div>
+                <strong>Inference</strong>
+                <span>Local · Ollama</span>
+            </div>
+
+            <div>
+                <strong>AI API</strong>
+                <span>None required</span>
+            </div>
+
+            <div>
+                <strong>Your history</strong>
+                <span>Stored locally</span>
+            </div>
+
+        </div>
+
+        <p class="ai-modal-footer">
+            Open models mean you can inspect,
+            modify, replace, and run the AI yourself.
+        </p>
+
+    </div>
+
+</div>
+
+<body>
+
+    <header class="navbar">
+        <div class="logo">
+            <span>🌿</span> TouchGrass AI
+        </div>
+
+        <div class="nav-actions">
+
+    <button id="journeyBtn" class="journey-btn">
+        MY JOURNEY
+    </button>
+
+    <button id="aiStatus" class="ai-status">
+
+    <span class="status-dot"></span>
+
+    Local AI
+
+</button>
+
+</div>
+    </header>
+
+
+    <main class="container">
+
+        <section class="hero">
+
+            <p class="eyebrow">OPEN-SOURCE OUTDOOR AI</p>
+
+            <h1>
+                Get out.<br>
+                <span>AI stays in.</span>
+            </h1>
+
+            <p class="subtitle">
+                Generate personalized outdoor missions with
+                AI that can run locally on your device.
+            </p>
+
+        </section>
+
+
+        <section class="mission-card">
+
+            <div class="card-header">
+                <div>
+                    <p class="label">CREATE A MISSION</p>
+                    <h2>What are you doing today?</h2>
+                </div>
+
+                <div class="leaf-icon">🌱</div>
+            </div>
+
+
+            <div class="activities">
+
+                <button class="activity active" data-activity="Running">
+                    🏃
+                    <span>Run</span>
+                </button>
+
+                <button class="activity" data-activity="Walking">
+                    🚶
+                    <span>Walk</span>
+                </button>
+
+                <button class="activity" data-activity="Hiking">
+                    🥾
+                    <span>Hike</span>
+                </button>
+
+                <button class="activity" data-activity="Cycling">
+                    🚴
+                    <span>Cycle</span>
+                </button>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label for="duration">Duration</label>
+
+                <select id="duration">
+
+                    <option value="15">15 minutes</option>
+                    <option value="30" selected>30 minutes</option>
+                    <option value="45">45 minutes</option>
+                    <option value="60">60 minutes</option>
+                    <option value="90">90 minutes</option>
+
+                </select>
+
+            </div>
+
+
+            <div class="form-group">
+
+                <label for="goal">What's your goal?</label>
+
+                <input
+                    type="text"
+                    id="goal"
+                    placeholder="Improve endurance"
+                >
+
+            </div>
+
+
+            <button id="generateBtn" class="generate-btn">
+
+                <span>CREATE MY MISSION</span>
+
+                <span>→</span>
+
+            </button>
+
+        </section>
+
+
+        <section id="result" class="result hidden">
+
+            <div class="result-header">
+
+                <div>
+                    <p class="label">YOUR MISSION</p>
+                    <h2 id="missionTitle">Ready to go.</h2>
+                </div>
+
+                <span class="mission-emoji">🌿</span>
+
+            </div>
+
+            <div id="missionContent"></div>
+
+            <button id="outsideBtn" class="outside-btn">
+                🌳 GO OUTSIDE
+            </button>
+
+        </section>
+
+        <section id="journey" class="journey hidden">
+
+    <div class="journey-header">
+
+        <div>
+
+            <p class="eyebrow">
+                YOUR JOURNEY
+            </p>
+
+            <h2>
+                Time well spent.
+            </h2>
+
+        </div>
+
+        <button
+            id="closeJourney"
+            class="close-btn"
+        >
+            ×
+        </button>
+
+    </div>
+
+
+    <div class="journey-stats">
+
+        <div class="stat">
+            <strong id="missionCount">0</strong>
+            <span>MISSIONS</span>
+        </div>
+
+        <div class="stat">
+            <strong id="totalTime">0m</strong>
+            <span>OUTSIDE</span>
+        </div>
+
+    </div>
+
+
+    <div id="historyList"></div>
+
+</section>
+
+    </main>
+
+
+    <footer>
+
+        <p>
+            Powered by open-weight AI · Designed to get you offline.
+        </p>
+
+    </footer>
+
+
+    <script src="script.js"></script>
+
+</body>
+</html>
