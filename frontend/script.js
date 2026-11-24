@@ -100,7 +100,7 @@ function parseMission(text) {
 
   for (let index = 0; index < MISSION_SECTIONS.length; index += 1) {
     const section = MISSION_SECTIONS[index];
-    const startPattern = new RegExp(`(?:^|\\n)\\s*${section.key.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}\\s*:\\s*`, "i");
+    const startPattern = new RegExp(`(?:^|\\n)\\s*${section.key}\\s*:\\s*`, "i");
     const startMatch = startPattern.exec(normalized);
     if (!startMatch) continue;
 
@@ -108,7 +108,7 @@ function parseMission(text) {
     let end = normalized.length;
 
     for (const nextSection of MISSION_SECTIONS.slice(index + 1)) {
-      const nextPattern = new RegExp(`\\n\\s*${nextSection.key.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}\\s*:`, "i");
+      const nextPattern = new RegExp(`\\n\\s*${nextSection.key}\\s*:`, "i");
       const nextMatch = nextPattern.exec(normalized.slice(start));
       if (nextMatch) {
         end = Math.min(end, start + nextMatch.index);
