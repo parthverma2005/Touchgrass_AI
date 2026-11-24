@@ -77,7 +77,8 @@ def health():
         response.raise_for_status()
         models = response.json().get("models", [])
         model_available = any(
-            model.get("name", "").split(":")[0] == OLLAMA_MODEL.split(":")[0]
+            model.get("name") == OLLAMA_MODEL
+            or model.get("model") == OLLAMA_MODEL
             for model in models
         )
         ollama_status = "available" if model_available else "model_not_found"
