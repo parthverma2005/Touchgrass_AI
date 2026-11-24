@@ -1,276 +1,220 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-    <title>TouchGrass AI</title>
-
-    <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f4f5ef">
+  <meta name="description" content="A thoughtful AI companion that turns screen time into time outside. Create a personal outdoor mission, put your phone away, and reflect afterwards.">
+  <title>TouchGrass — Make room for outside</title>
+  <link rel="stylesheet" href="./style.css">
 </head>
-
-<div id="aiInfoModal" class="ai-modal hidden">
-
-    <div class="ai-modal-card">
-
-        <button
-            id="closeAiModal"
-            class="ai-modal-close"
-        >
-            ×
-        </button>
-
-        <div class="ai-modal-icon">
-            🤖
-        </div>
-
-        <p class="label">
-            OPEN AI, LOCALLY
-        </p>
-
-        <h2>
-            Your AI stays on your machine.
-        </h2>
-
-        <p>
-            TouchGrass AI uses an open-weight model
-            running locally through Ollama.
-        </p>
-
-        <div class="ai-info-list">
-
-            <div>
-                <strong>Model</strong>
-                <span>Qwen 2.5 · 0.5B</span>
-            </div>
-
-            <div>
-                <strong>Inference</strong>
-                <span>Local · Ollama</span>
-            </div>
-
-            <div>
-                <strong>AI API</strong>
-                <span>None required</span>
-            </div>
-
-            <div>
-                <strong>Your history</strong>
-                <span>Stored locally</span>
-            </div>
-
-        </div>
-
-        <p class="ai-modal-footer">
-            Open models mean you can inspect,
-            modify, replace, and run the AI yourself.
-        </p>
-
-    </div>
-
-</div>
-
 <body>
-
+  <div class="app-shell">
     <header class="navbar">
-        <div class="logo">
-            <span>🌿</span> TouchGrass AI
-        </div>
+      <a class="brand" href="#" aria-label="TouchGrass home">
+        <span class="brand-mark" aria-hidden="true">✳</span>
+        <span class="brand-name">touchgrass<span>.</span></span>
+      </a>
 
-        <div class="nav-actions">
-
-    <button id="journeyBtn" class="journey-btn">
-        MY JOURNEY
-    </button>
-
-    <button id="aiStatus" class="ai-status">
-
-    <span class="status-dot"></span>
-
-    Local AI
-
-</button>
-
-</div>
+      <nav class="nav-actions" aria-label="Main navigation">
+        <button id="journeyBtn" class="nav-link" type="button">
+          <span class="nav-link-icon" aria-hidden="true">◷</span>
+          My journey
+        </button>
+        <button id="aiStatus" class="ai-status" type="button" aria-haspopup="dialog" aria-controls="aiInfoModal">
+          <span class="status-dot" aria-hidden="true"></span>
+          <span id="aiStatusText">Checking local AI</span>
+          <span class="status-chevron" aria-hidden="true">⌄</span>
+        </button>
+      </nav>
     </header>
 
-
     <main class="container">
+      <section class="welcome-grid" aria-labelledby="hero-title">
+        <div class="hero-copy">
+          <div class="eyebrow"><span class="eyebrow-line"></span> A LITTLE MORE LIFE, OFFLINE</div>
+          <h1 id="hero-title">Make room<br>for <em>outside.</em></h1>
+          <p class="hero-description">
+            A small nudge to close the tabs, step into the world, and notice what's already there.
+            Your AI makes the plan. The rest happens out there.
+          </p>
+          <div class="hero-note">
+            <span class="hero-note-icon" aria-hidden="true">✳</span>
+            <span><strong>Less screen. More seen.</strong><br>Designed to get you out the door, not keep you scrolling.</span>
+          </div>
+        </div>
 
-        <section class="hero">
+        <aside class="ritual-card" aria-label="The TouchGrass approach">
+          <div class="ritual-topline">
+            <span class="ritual-label">THE OUTSIDE RITUAL</span>
+            <span class="ritual-spark" aria-hidden="true">✳</span>
+          </div>
+          <div class="ritual-illustration" aria-hidden="true">
+            <div class="sun"></div>
+            <div class="hill hill-back"></div>
+            <div class="hill hill-front"></div>
+            <div class="ritual-path"></div>
+            <div class="ritual-flower flower-one">✿</div>
+            <div class="ritual-flower flower-two">✳</div>
+          </div>
+          <div class="ritual-steps">
+            <div class="ritual-step"><span>01</span><p>Get a simple plan</p><b>↗</b></div>
+            <div class="ritual-step"><span>02</span><p>Put your phone away</p><b>↗</b></div>
+            <div class="ritual-step"><span>03</span><p>Come back with a story</p><b>↗</b></div>
+          </div>
+        </aside>
+      </section>
 
-            <p class="eyebrow">OPEN-SOURCE OUTDOOR AI</p>
+      <section class="workspace-grid" aria-label="Create an outdoor mission">
+        <div class="section-heading">
+          <div>
+            <div class="eyebrow"><span class="eyebrow-line"></span> YOUR NEXT LITTLE ADVENTURE</div>
+            <h2>What sounds good today?</h2>
+          </div>
+          <span class="section-index">01 / MAKE A PLAN</span>
+        </div>
 
-            <h1>
-                Get out.<br>
-                <span>AI stays in.</span>
-            </h1>
-
-            <p class="subtitle">
-                Generate personalized outdoor missions with
-                AI that can run locally on your device.
-            </p>
-
-        </section>
-
-
-        <section class="mission-card">
-
-            <div class="card-header">
-                <div>
-                    <p class="label">CREATE A MISSION</p>
-                    <h2>What are you doing today?</h2>
-                </div>
-
-                <div class="leaf-icon">🌱</div>
+        <div class="mission-card">
+          <div class="card-intro">
+            <div>
+              <span class="card-kicker">START WHERE YOU ARE</span>
+              <h3>Choose your way outside.</h3>
+              <p>No perfect routine required. Just pick something that feels doable.</p>
             </div>
+            <span class="card-leaf" aria-hidden="true">❋</span>
+          </div>
 
-
-            <div class="activities">
-
-                <button class="activity active" data-activity="Running">
-                    🏃
-                    <span>Run</span>
-                </button>
-
-                <button class="activity" data-activity="Walking">
-                    🚶
-                    <span>Walk</span>
-                </button>
-
-                <button class="activity" data-activity="Hiking">
-                    🥾
-                    <span>Hike</span>
-                </button>
-
-                <button class="activity" data-activity="Cycling">
-                    🚴
-                    <span>Cycle</span>
-                </button>
-
+          <div class="field-block">
+            <div class="field-label-row">
+              <label class="field-label" id="activity-label">I feel like...</label>
+              <span class="field-hint">CHOOSE ONE</span>
             </div>
+            <div class="activities" role="group" aria-labelledby="activity-label">
+              <button class="activity active" type="button" data-activity="Walking" aria-pressed="true">
+                <span class="activity-icon" aria-hidden="true">🚶</span><span class="activity-name">Walk</span>
+                <span class="activity-check" aria-hidden="true">✓</span>
+              </button>
+              <button class="activity" type="button" data-activity="Running" aria-pressed="false">
+                <span class="activity-icon" aria-hidden="true">🏃</span><span class="activity-name">Run</span>
+                <span class="activity-check" aria-hidden="true">✓</span>
+              </button>
+              <button class="activity" type="button" data-activity="Hiking" aria-pressed="false">
+                <span class="activity-icon" aria-hidden="true">🥾</span><span class="activity-name">Hike</span>
+                <span class="activity-check" aria-hidden="true">✓</span>
+              </button>
+              <button class="activity" type="button" data-activity="Cycling" aria-pressed="false">
+                <span class="activity-icon" aria-hidden="true">🚲</span><span class="activity-name">Cycle</span>
+                <span class="activity-check" aria-hidden="true">✓</span>
+              </button>
+            </div>
+          </div>
 
-
+          <div class="form-row">
             <div class="form-group">
-
-                <label for="duration">Duration</label>
-
+              <label for="duration">How much time have you got?</label>
+              <div class="select-wrap">
                 <select id="duration">
-
-                    <option value="15">15 minutes</option>
-                    <option value="30" selected>30 minutes</option>
-                    <option value="45">45 minutes</option>
-                    <option value="60">60 minutes</option>
-                    <option value="90">90 minutes</option>
-
+                  <option value="15">15 minutes · A quick reset</option>
+                  <option value="30" selected>30 minutes · A proper break</option>
+                  <option value="45">45 minutes · Take your time</option>
+                  <option value="60">1 hour · Get exploring</option>
+                  <option value="90">90 minutes · Make a day of it</option>
                 </select>
-
+                <span class="select-chevron" aria-hidden="true">⌄</span>
+              </div>
             </div>
-
-
             <div class="form-group">
-
-                <label for="goal">What's your goal?</label>
-
-                <input
-                    type="text"
-                    id="goal"
-                    placeholder="Improve endurance"
-                >
-
+              <label for="goal">What's on your mind? <span class="optional-label">OPTIONAL</span></label>
+              <input id="goal" type="text" maxlength="160" placeholder="Clear my head, move a little, explore..." autocomplete="off">
             </div>
+          </div>
 
-
-            <button id="generateBtn" class="generate-btn">
-
-                <span>CREATE MY MISSION</span>
-
-                <span>→</span>
-
+          <div class="card-bottom">
+            <p class="privacy-note"><span aria-hidden="true">◉</span> Your mission starts with a private prompt.</p>
+            <button id="generateBtn" class="generate-btn" type="button">
+              <span class="generate-icon" aria-hidden="true">✳</span>
+              <span class="generate-label">Make my mission</span>
+              <span class="generate-arrow" aria-hidden="true">↗</span>
             </button>
-
-        </section>
-
-
-        <section id="result" class="result hidden">
-
-            <div class="result-header">
-
-                <div>
-                    <p class="label">YOUR MISSION</p>
-                    <h2 id="missionTitle">Ready to go.</h2>
-                </div>
-
-                <span class="mission-emoji">🌿</span>
-
-            </div>
-
-            <div id="missionContent"></div>
-
-            <button id="outsideBtn" class="outside-btn">
-                🌳 GO OUTSIDE
-            </button>
-
-        </section>
-
-        <section id="journey" class="journey hidden">
-
-    <div class="journey-header">
-
-        <div>
-
-            <p class="eyebrow">
-                YOUR JOURNEY
-            </p>
-
-            <h2>
-                Time well spent.
-            </h2>
-
+          </div>
         </div>
+      </section>
 
-        <button
-            id="closeJourney"
-            class="close-btn"
-        >
-            ×
-        </button>
+      <section id="result" class="result hidden" aria-live="polite" aria-labelledby="missionTitle">
+        <div class="result-topline">
+          <div>
+            <div class="eyebrow"><span class="eyebrow-line"></span> YOUR PLAN IS READY</div>
+            <h2 id="missionTitle">A little time outside.</h2>
+            <p id="missionMeta" class="mission-meta"></p>
+          </div>
+          <span class="result-stamp" aria-hidden="true">MADE<br>FOR YOU ✳</span>
+        </div>
+        <div id="missionContent" class="mission-content"></div>
+        <div class="result-action">
+          <p><strong>One last thing:</strong> once you're outside, let the phone stay in your pocket.</p>
+          <button id="outsideBtn" class="outside-btn" type="button"><span aria-hidden="true">↗</span> I'm heading out</button>
+        </div>
+      </section>
 
-    </div>
-
-
-    <div class="journey-stats">
-
-        <div class="stat">
+      <section id="journey" class="journey hidden" aria-labelledby="journeyTitle">
+        <div class="journey-heading">
+          <div>
+            <div class="eyebrow"><span class="eyebrow-line"></span> THE GOOD PART ADDS UP</div>
+            <h2 id="journeyTitle">Your time, well spent.</h2>
+            <p class="journey-subtitle">A little record of the moments you made room for.</p>
+          </div>
+          <button id="closeJourney" class="close-btn" type="button" aria-label="Close journey">×</button>
+        </div>
+        <div class="journey-stats">
+          <article class="stat-card">
+            <span class="stat-icon" aria-hidden="true">✳</span>
             <strong id="missionCount">0</strong>
-            <span>MISSIONS</span>
-        </div>
-
-        <div class="stat">
+            <span class="stat-label">MOMENTS OUTSIDE</span>
+          </article>
+          <article class="stat-card stat-card-accent">
+            <span class="stat-icon" aria-hidden="true">◷</span>
             <strong id="totalTime">0m</strong>
-            <span>OUTSIDE</span>
+            <span class="stat-label">TIME WELL SPENT</span>
+          </article>
         </div>
+        <div class="history-heading">
+          <h3>Your recent moments</h3>
+          <span>KEPT ON THIS DEVICE</span>
+        </div>
+        <div id="historyList" class="history-list"></div>
+      </section>
 
-    </div>
-
-
-    <div id="historyList"></div>
-
-</section>
-
+      <section class="closing-note" aria-label="A reminder">
+        <span class="closing-flower" aria-hidden="true">✳</span>
+        <p>There is a whole world beyond the little rectangle.</p>
+        <span class="closing-caption">GO ON. IT'S WAITING.</span>
+      </section>
     </main>
 
-
-    <footer>
-
-        <p>
-            Powered by open-weight AI · Designed to get you offline.
-        </p>
-
+    <footer class="footer">
+      <a class="brand footer-brand" href="#"><span class="brand-mark" aria-hidden="true">✳</span><span class="brand-name">touchgrass<span>.</span></span></a>
+      <p>Thoughtfully made to help you spend less time here.</p>
+      <span class="footer-tag">GET OUT. AI STAYS IN.</span>
     </footer>
+  </div>
 
+  <div id="aiInfoModal" class="ai-modal hidden" role="dialog" aria-modal="true" aria-labelledby="aiModalTitle">
+    <div class="ai-modal-card">
+      <button id="closeAiModal" class="ai-modal-close" type="button" aria-label="Close AI information">×</button>
+      <span class="modal-symbol" aria-hidden="true">✳</span>
+      <div class="eyebrow"><span class="eyebrow-line"></span> BEHIND THE LEAVES</div>
+      <h2 id="aiModalTitle">A little help from AI.</h2>
+      <p class="modal-description">TouchGrass uses AI to shape a practical outdoor idea around your time, activity and intention. The goal is to get you away from the screen again.</p>
+      <div class="ai-info-list">
+        <div><span>Current provider</span><strong id="aiProviderValue">Ollama · local</strong></div>
+        <div><span>Model</span><strong id="aiModelValue">Qwen 2.5 · 0.5B</strong></div>
+        <div><span>Connection</span><strong id="aiConnectionValue">Checking…</strong></div>
+        <div><span>Journey history</span><strong>Stored on this device</strong></div>
+      </div>
+      <p class="modal-footnote">This is a development build. Hybrid Firebase AI inference will be introduced in a later upgrade.</p>
+    </div>
+  </div>
 
-    <script src="script.js"></script>
-
+  <script src="./script.js"></script>
 </body>
 </html>
