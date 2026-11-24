@@ -1,997 +1,460 @@
-let selectedActivity = "Running";
+const API_BASE = window.TOUCHGRASS_API_BASE || "http://127.0.0.1:8000";
+const HISTORY_KEY = "touchgrass_history";
+const ACTIVITY_ICONS = {
+  Running: "🏃",
+  Walking: "🚶",
+  Hiking: "🥾",
+  Cycling: "🚲"
+};
+const MISSION_SECTIONS = [
+  { key: "WARM-UP", icon: "🔥" },
+  { key: "MAIN ACTIVITY", icon: "🌿" },
+  { key: "OUTDOOR CHALLENGE", icon: "👀" },
+  { key: "COOL-DOWN", icon: "🧘" },
+  { key: "MOTIVATION", icon: "✳" }
+];
 
+let selectedActivity = "Walking";
+let currentMission = null;
+let outsideSeconds = 0;
+let outsideStartedAt = null;
+let outsideInterval = null;
+let ratings = { energy: 0, mood: 0, difficulty: 0 };
 
-// ------------------------------------
-// ACTIVITY SELECTION
-// ------------------------------------
+const $ = (id) => document.getElementById(id);
 
-const activities = document.querySelectorAll(".activity");
+function escapeHTML(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#39;"
+  })[character]);
+}
 
-activities.forEach(button => {
+function readHistory() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(HISTORY_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed.filter((item) => item && typeof item === "object") : [];
+  } catch (error) {
+    console.warn("TouchGrass history could not be read:", error);
+    return [];
+  }
+}
 
-    button.addEventListener("click", () => {
+function writeHistory(history) {
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    return true;
+  } catch (error) {
+    console.error("TouchGrass history could not be saved:", error);
+    return false;
+  }
+}
 
-        activities.forEach(btn => {
-            btn.classList.remove("active");
-        });
+function setButtonLoading(button, loading) {
+  button.disabled = loading;
+  button.querySelector(".generate-label").textContent = loading ? "Making your plan…" : "Make my mission";
+  button.querySelector(".generate-icon").textContent = loading ? "…" : "✳";
+  button.querySelector(".generate-arrow").textContent = loading ? "" : "↗";
+}
 
-        button.classList.add("active");
+function setAIStatus(state, label, connection = label) {
+  const button = $("aiStatus");
+  button.dataset.state = state;
+  $("aiStatusText").textContent = label;
+  $("aiConnectionValue").textContent = connection;
+}
 
-        selectedActivity =
-            button.dataset.activity;
+async function checkAIHealth() {
+  try {
+    const response = await fetch(`${API_BASE}/health`, { signal: AbortSignal.timeout(3500) });
+    if (!response.ok) throw new Error(`Health endpoint returned ${response.status}`);
+    const data = await response.json();
+    const available = data.ai_status === "available";
+    setAIStatus(available ? "online" : "offline", available ? "Local AI ready" : "AI model unavailable", data.ai_status || "Unknown");
+    $("aiProviderValue").textContent = "Ollama · local";
+    $("aiModelValue").textContent = data.model || "Qwen 2.5 · 0.5B";
+  } catch (error) {
+    setAIStatus("offline", "AI connection needed", "Backend not reachable");
+  }
+}
 
-    });
+function selectActivity(button) {
+  document.querySelectorAll(".activity").forEach((item) => {
+    const active = item === button;
+    item.classList.toggle("active", active);
+    item.setAttribute("aria-pressed", String(active));
+  });
+  selectedActivity = button.dataset.activity;
+}
 
+document.querySelectorAll(".activity").forEach((button) => {
+  button.addEventListener("click", () => selectActivity(button));
 });
 
+function parseMission(text) {
+  const normalized = String(text || "").replace(/\r/g, "").trim();
+  const sections = [];
 
-// ------------------------------------
-// GENERATE MISSION
-// ------------------------------------
+  for (let index = 0; index < MISSION_SECTIONS.length; index += 1) {
+    const section = MISSION_SECTIONS[index];
+    const startPattern = new RegExp(`(?:^|\\n)\\s*${section.key.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}\\s*:\\s*`, "i");
+    const startMatch = startPattern.exec(normalized);
+    if (!startMatch) continue;
 
-document
-    .getElementById("generateBtn")
-    .addEventListener("click", generateMission);
+    const start = startMatch.index + startMatch[0].length;
+    let end = normalized.length;
 
+    for (const nextSection of MISSION_SECTIONS.slice(index + 1)) {
+      const nextPattern = new RegExp(`\\n\\s*${nextSection.key.replace(/[.*+?^${}()|[\\]\\\\]/g, "\\$&")}\\s*:`, "i");
+      const nextMatch = nextPattern.exec(normalized.slice(start));
+      if (nextMatch) {
+        end = Math.min(end, start + nextMatch.index);
+        break;
+      }
+    }
+
+    const content = normalized.slice(start, end).trim().replace(/^["']|["']$/g, "");
+    if (content) sections.push({ ...section, content });
+  }
+
+  if (!sections.length && normalized) {
+    sections.push({ key: "YOUR OUTDOOR MISSION", icon: "🌿", content: normalized });
+  }
+
+  return sections.map((section) => `
+    <article class="mission-section">
+      <span class="mission-section-icon" aria-hidden="true">${section.icon}</span>
+      <div>
+        <div class="mission-section-title">${escapeHTML(section.key)}</div>
+        <div class="mission-section-text">${escapeHTML(section.content).replace(/\n/g, "<br>")}</div>
+      </div>
+    </article>
+  `).join("");
+}
 
 async function generateMission() {
+  const button = $("generateBtn");
+  const duration = Number($("duration").value);
+  const goal = $("goal").value.trim() || "Feel refreshed and enjoy the outdoors";
 
-    const duration =
-        document.getElementById("duration").value;
+  if (!Number.isInteger(duration) || duration < 5 || duration > 180) {
+    $("goal").focus();
+    return;
+  }
 
-    const goal =
-        document.getElementById("goal").value ||
-        "enjoy the outdoors";
+  setButtonLoading(button, true);
+  $("missionTitle").textContent = "Putting a little plan together…";
+  $("missionMeta").textContent = "A moment while your local AI gets creative.";
+  $("missionContent").innerHTML = `
+    <div class="mission-section">
+      <span class="mission-section-icon" aria-hidden="true">✳</span>
+      <div><div class="mission-section-title">MAKING SPACE</div><div class="mission-section-text">Creating a simple plan around your activity and the time you have.</div></div>
+    </div>`;
+  $("outsideBtn").classList.add("hidden");
+  $("result").classList.remove("hidden");
+  $("result").scrollIntoView({ behavior: "smooth", block: "start" });
 
-
-    const result =
-        document.getElementById("result");
-
-    const missionTitle =
-        document.getElementById("missionTitle");
-
-    const missionContent =
-        document.getElementById("missionContent");
-
-    const generateButton =
-        document.getElementById("generateBtn");
-
-
-    // --------------------------------
-    // LOADING STATE
-    // --------------------------------
-
-    generateButton.disabled = true;
-
-    generateButton.innerHTML = `
-        <span>CREATING YOUR MISSION...</span>
-        <span>🌿</span>
-    `;
-
-
-    missionTitle.textContent =
-        "Your local AI is thinking...";
-
-
-    missionContent.innerHTML = `
-        <div class="mission-step">
-
-            <div class="step-number">🌿</div>
-
-            <div>
-                Creating a personalized
-                outdoor mission...
-            </div>
-
-        </div>
-    `;
-
-
-    result.classList.remove("hidden");
-
-    result.scrollIntoView({
-        behavior: "smooth"
+  try {
+    const query = new URLSearchParams({
+      activity: selectedActivity,
+      duration: String(duration),
+      goal
+    });
+    const response = await fetch(`${API_BASE}/generate?${query.toString()}`, {
+      method: "POST",
+      headers: { "Accept": "application/json" },
+      signal: AbortSignal.timeout(100000)
     });
 
-
-    // --------------------------------
-    // CALL FASTAPI
-    // --------------------------------
-
-    try {
-
-        const url =
-            `http://127.0.0.1:8000/generate` +
-            `?activity=${encodeURIComponent(selectedActivity)}` +
-            `&duration=${encodeURIComponent(duration)}` +
-            `&goal=${encodeURIComponent(goal)}`;
-
-
-        const response =
-            await fetch(url, {
-                method: "POST"
-            });
-
-
-        if (!response.ok) {
-
-            throw new Error(
-                `Server returned ${response.status}`
-            );
-
-        }
-
-
-        const data =
-            await response.json();
-
-
-        // --------------------------------
-        // DISPLAY AI RESPONSE
-        // --------------------------------
-
-        missionTitle.textContent =
-            `${duration}-Minute ${selectedActivity}`;
-
-
-       missionContent.innerHTML =
-    formatMission(data.mission);
-
-
-    } catch (error) {
-
-        console.error(
-            "TouchGrass AI Error:",
-            error
-        );
-
-
-        missionTitle.textContent =
-            "Something went wrong";
-
-
-        missionContent.innerHTML = `
-
-            <div class="mission-step">
-
-                <div class="step-number">!</div>
-
-                <div>
-
-                    <strong>Couldn't connect to local AI.</strong>
-
-                    <br><br>
-
-                    Make sure:
-
-                    <br>• Ollama is running
-                    <br>• Qwen 0.5B is installed
-                    <br>• FastAPI is running
-
-                </div>
-
-            </div>
-
-        `;
-
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const detail = typeof data.detail === "string" ? data.detail : `The mission request failed (${response.status}).`;
+      throw new Error(detail);
+    }
+    if (typeof data.mission !== "string" || !data.mission.trim()) {
+      throw new Error("The AI returned an empty plan. Please try again.");
     }
 
+    currentMission = {
+      activity: selectedActivity,
+      duration,
+      goal,
+      mission: data.mission,
+      provider: data.provider || "ollama",
+      model: data.model || "qwen2.5:0.5b"
+    };
 
-    // --------------------------------
-    // RESTORE BUTTON
-    // --------------------------------
-
-    generateButton.disabled = false;
-
-    generateButton.innerHTML = `
-        <span>CREATE MY MISSION</span>
-        <span>→</span>
-    `;
-
+    $("missionTitle").textContent = `${duration} minutes of ${selectedActivity.toLowerCase()}`;
+    $("missionMeta").textContent = `${selectedActivity} · ${duration} minutes · ${goal}`;
+    $("missionContent").innerHTML = parseMission(data.mission);
+    $("outsideBtn").classList.remove("hidden");
+    $("aiProviderValue").textContent = data.provider === "ollama" ? "Ollama · local" : (data.provider || "AI");
+    $("aiModelValue").textContent = data.model || "Local model";
+    setAIStatus("online", "Local AI ready", "Mission generated");
+  } catch (error) {
+    console.error("TouchGrass mission generation failed:", error);
+    $("missionTitle").textContent = "Let's try that again.";
+    $("missionMeta").textContent = "Your plan couldn't be generated just now.";
+    $("missionContent").innerHTML = `
+      <div class="mission-section">
+        <span class="mission-section-icon" aria-hidden="true">↻</span>
+        <div>
+          <div class="mission-section-title">COULDN'T REACH YOUR AI</div>
+          <div class="mission-section-text">${escapeHTML(error.message || "Check that the TouchGrass backend and Ollama are running, then try again.")}</div>
+        </div>
+      </div>`;
+    $("outsideBtn").classList.add("hidden");
+    setAIStatus("offline", "AI connection needed", "Generation failed");
+  } finally {
+    setButtonLoading(button, false);
+  }
 }
 
-
-// ------------------------------------
-// FORMAT AI RESPONSE
-// ------------------------------------
-
-function formatMission(text) {
-
-    // Remove markdown formatting
-    text = text
-        .replace(/###/g, "")
-        .replace(/\*\*/g, "")
-        .replace(/\\/g, "");
-
-
-    const sections = [
-        {
-            key: "WARM-UP",
-            icon: "🔥"
-        },
-        {
-            key: "MAIN ACTIVITY",
-            icon: "🏃"
-        },
-        {
-            key: "OUTDOOR CHALLENGE",
-            icon: "👀"
-        },
-        {
-            key: "COOL-DOWN",
-            icon: "🧘"
-        },
-        {
-            key: "MOTIVATION",
-            icon: "🌱"
-        }
-    ];
-
-
-    let html = "";
-
-
-    sections.forEach((section, index) => {
-
-        const current =
-            section.key + ":";
-
-        const start =
-            text.toUpperCase().indexOf(current);
-
-
-        if (start === -1) {
-            return;
-        }
-
-
-        let end =
-            text.length;
-
-
-        for (
-            let i = index + 1;
-            i < sections.length;
-            i++
-        ) {
-
-            const next =
-                sections[i].key + ":";
-
-            const nextIndex =
-                text.toUpperCase().indexOf(next);
-
-            if (nextIndex !== -1) {
-                end = nextIndex;
-                break;
-            }
-
-        }
-
-
-        let content =
-            text
-                .substring(
-                    start + current.length,
-                    end
-                )
-                .trim();
-
-
-        // Remove accidental instruction text
-        content =
-            content
-                .replace(
-                    /Keep every line short\.?/gi,
-                    ""
-                )
-                .replace(
-                    /Do not.*$/gim,
-                    ""
-                )
-                .trim();
-
-
-        if (!content) {
-            return;
-        }
-
-
-        html += `
-
-            <div class="mission-section">
-
-                <div class="mission-section-icon">
-                    ${section.icon}
-                </div>
-
-                <div class="mission-section-content">
-
-                    <div class="mission-section-title">
-                        ${section.key}
-                    </div>
-
-                    <div class="mission-section-text">
-                        ${content}
-                    </div>
-
-                </div>
-
-            </div>
-
-        `;
-
-    });
-
-
-    return html;
-
-}
-// ------------------------------------
-// GO OUTSIDE MODE
-// ------------------------------------
-
-document
-    .getElementById("outsideBtn")
-    .addEventListener("click", startOutsideMode);
-
+$("generateBtn").addEventListener("click", generateMission);
+$("goal").addEventListener("keydown", (event) => {
+  if (event.key === "Enter") generateMission();
+});
 
 function startOutsideMode() {
+  if (!currentMission) return;
+  clearInterval(outsideInterval);
+  outsideSeconds = 0;
+  outsideStartedAt = Date.now();
 
-    const result =
-        document.getElementById("result");
-
-    const missionContent =
-        document.getElementById("missionContent");
-
-
-    missionContent.innerHTML = `
-
-        <div class="outside-mode">
-
-            <div class="outside-icon">
-                🌳
-            </div>
-
-            <p class="label">
-                OUTSIDE MODE
-            </p>
-
-            <h2>
-                Put your phone away.
-            </h2>
-
-            <p class="outside-message">
-                Your mission is ready.
-                The screen is no longer the point.
-            </p>
-
-            <div class="timer" id="outsideTimer">
-                00:00
-            </div>
-
-            <p class="timer-label">
-                TIME OUTSIDE
-            </p>
-
-            <button
-                id="endMissionBtn"
-                class="outside-btn"
-            >
-                FINISH MISSION
-            </button>
-
-        </div>
-
-    `;
-
-
-    startOutsideTimer();
-
-
-    document
-        .getElementById("endMissionBtn")
-        .addEventListener(
-            "click",
-            endOutsideMode
-        );
-
-
-    result.scrollIntoView({
-        behavior: "smooth"
-    });
-
+  $("missionContent").innerHTML = `
+    <div class="outside-mode">
+      <div class="outside-icon" aria-hidden="true">🌳</div>
+      <div class="label">YOU'RE RIGHT WHERE YOU NEED TO BE</div>
+      <h2>Now, be here.</h2>
+      <p class="outside-message">Your plan is ready. Let the phone rest and give your attention to the world around you.</p>
+      <div class="timer" id="outsideTimer" role="timer" aria-live="off">00:00</div>
+      <div class="timer-label">TIME OUTSIDE</div>
+      <button id="endMissionBtn" class="outside-btn" type="button">I'm back · Finish mission</button>
+    </div>`;
+  $("outsideBtn").classList.add("hidden");
+  startOutsideTimer();
+  $("endMissionBtn").addEventListener("click", endOutsideMode);
 }
-// ------------------------------------
-// OUTSIDE TIMER
-// ------------------------------------
 
-let outsideSeconds = 0;
+$("outsideBtn").addEventListener("click", startOutsideMode);
 
-let outsideInterval = null;
-
+function updateOutsideTimer() {
+  if (!outsideStartedAt) return;
+  outsideSeconds = Math.max(0, Math.floor((Date.now() - outsideStartedAt) / 1000));
+  const timer = $("outsideTimer");
+  if (timer) timer.textContent = formatTime(outsideSeconds, true);
+}
 
 function startOutsideTimer() {
-
-    outsideSeconds = 0;
-
-
-    const timer =
-        document.getElementById("outsideTimer");
-
-
-    outsideInterval =
-        setInterval(() => {
-
-            outsideSeconds++;
-
-
-            const minutes =
-                Math.floor(
-                    outsideSeconds / 60
-                );
-
-            const seconds =
-                outsideSeconds % 60;
-
-
-            timer.textContent =
-                `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-
-        }, 1000);
-
+  updateOutsideTimer();
+  outsideInterval = setInterval(updateOutsideTimer, 1000);
 }
-// ------------------------------------
-// END OUTSIDE MODE
-// ------------------------------------
 
 function endOutsideMode() {
+  updateOutsideTimer();
+  clearInterval(outsideInterval);
+  outsideInterval = null;
+  outsideStartedAt = null;
+  ratings = { energy: 0, mood: 0, difficulty: 0 };
 
-    clearInterval(outsideInterval);
+  $("missionContent").innerHTML = `
+    <div class="reflection">
+      <div class="outside-icon" aria-hidden="true">🌿</div>
+      <div class="label">A MOMENT TO NOTICE</div>
+      <h2>How did that feel?</h2>
+      <p class="reflection-subtitle">You made ${escapeHTML(formatTime(outsideSeconds))} for yourself. Take a breath and check in.</p>
 
-    const missionContent =
-        document.getElementById("missionContent");
-
-    missionContent.innerHTML = `
-
-        <div class="reflection">
-
-            <div class="outside-icon">
-                🌿
-            </div>
-
-            <p class="label">
-                MISSION COMPLETE
-            </p>
-
-            <h2>
-                How was it?
-            </h2>
-
-            <p class="reflection-subtitle">
-                You spent
-                <strong>${formatTime(outsideSeconds)}</strong>
-                outside.
-            </p>
-
-
-            <!-- ENERGY -->
-
-            <div class="rating-group">
-
-                <label>ENERGY</label>
-
-                <div class="rating"
-                     data-rating="energy">
-
-                    <button data-value="1">★</button>
-                    <button data-value="2">★</button>
-                    <button data-value="3">★</button>
-                    <button data-value="4">★</button>
-                    <button data-value="5">★</button>
-
-                </div>
-
-            </div>
-
-
-            <!-- MOOD -->
-
-            <div class="rating-group">
-
-                <label>MOOD</label>
-
-                <div class="rating"
-                     data-rating="mood">
-
-                    <button data-value="1">★</button>
-                    <button data-value="2">★</button>
-                    <button data-value="3">★</button>
-                    <button data-value="4">★</button>
-                    <button data-value="5">★</button>
-
-                </div>
-
-            </div>
-
-
-            <!-- DIFFICULTY -->
-
-            <div class="rating-group">
-
-                <label>DIFFICULTY</label>
-
-                <div class="rating"
-                     data-rating="difficulty">
-
-                    <button data-value="1">★</button>
-                    <button data-value="2">★</button>
-                    <button data-value="3">★</button>
-                    <button data-value="4">★</button>
-                    <button data-value="5">★</button>
-
-                </div>
-
-            </div>
-
-
-            <!-- REFLECTION -->
-
-            <div class="reflection-input">
-
-                <label>
-                    WHAT DID YOU NOTICE OUTSIDE?
-                </label>
-
-                <textarea
-                    id="reflectionText"
-                    placeholder="A bird, a new path, the sunset..."
-                    rows="4"
-                ></textarea>
-
-            </div>
-
-
-            <button
-                id="saveExperienceBtn"
-                class="outside-btn"
-            >
-                SAVE EXPERIENCE 🌿
-            </button>
-
+      <div class="rating-group">
+        <label>HOW'S YOUR ENERGY?</label>
+        <div class="rating" data-rating="energy" role="group" aria-label="Rate your energy from one to five">
+          ${ratingButtons()}
         </div>
-
-    `;
-
-
-    setupRatings();
-
-
-    document
-        .getElementById("saveExperienceBtn")
-        .addEventListener(
-            "click",
-            saveExperience
-        );
-
+      </div>
+      <div class="rating-group">
+        <label>HOW'S YOUR MOOD?</label>
+        <div class="rating" data-rating="mood" role="group" aria-label="Rate your mood from one to five">
+          ${ratingButtons()}
+        </div>
+      </div>
+      <div class="rating-group">
+        <label>HOW CHALLENGING WAS IT?</label>
+        <div class="rating" data-rating="difficulty" role="group" aria-label="Rate the difficulty from one to five">
+          ${ratingButtons()}
+        </div>
+      </div>
+      <div class="reflection-input">
+        <label for="reflectionText">WHAT'S ONE THING YOU NOTICED?</label>
+        <textarea id="reflectionText" maxlength="500" placeholder="The air felt different. I noticed a tiny flower by the path…" rows="3"></textarea>
+      </div>
+      <button id="saveExperienceBtn" class="outside-btn" type="button">Keep this moment <span aria-hidden="true">↗</span></button>
+    </div>`;
+  setupRatings();
+  $("saveExperienceBtn").addEventListener("click", saveExperience);
 }
-let ratings = {
-    energy: 0,
-    mood: 0,
-    difficulty: 0
-};
 
+function ratingButtons() {
+  return [1, 2, 3, 4, 5].map((value) => `<button type="button" data-value="${value}" aria-label="${value} out of 5">★</button>`).join("");
+}
 
 function setupRatings() {
-
-    const ratingGroups =
-        document.querySelectorAll(".rating");
-
-
-    ratingGroups.forEach(group => {
-
-        const buttons =
-            group.querySelectorAll("button");
-
-
-        buttons.forEach(button => {
-
-            button.addEventListener(
-                "click",
-                () => {
-
-                    const ratingType =
-                        group.dataset.rating;
-
-                    const value =
-                        Number(
-                            button.dataset.value
-                        );
-
-
-                    ratings[ratingType] =
-                        value;
-
-
-                    buttons.forEach(btn => {
-
-                        btn.classList.toggle(
-                            "selected",
-                            Number(
-                                btn.dataset.value
-                            ) <= value
-                        );
-
-                    });
-
-                }
-            );
-
+  document.querySelectorAll(".rating").forEach((group) => {
+    const type = group.dataset.rating;
+    group.querySelectorAll("button").forEach((button) => {
+      button.addEventListener("click", () => {
+        const value = Number(button.dataset.value);
+        ratings[type] = value;
+        group.querySelectorAll("button").forEach((item) => {
+          const selected = Number(item.dataset.value) <= value;
+          item.classList.toggle("selected", selected);
+          item.setAttribute("aria-pressed", String(selected));
         });
-
+      });
     });
-
+  });
 }
+
 function saveExperience() {
+  if (!currentMission) return;
+  const experience = {
+    id: typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
+    date: new Date().toISOString(),
+    activity: currentMission.activity,
+    goal: currentMission.goal,
+    duration: outsideSeconds,
+    plannedDuration: currentMission.duration,
+    provider: currentMission.provider,
+    energy: ratings.energy,
+    mood: ratings.mood,
+    difficulty: ratings.difficulty,
+    reflection: $("reflectionText").value.trim().slice(0, 500)
+  };
 
-    const reflection =
-        document
-            .getElementById("reflectionText")
-            .value
-            .trim();
+  const history = readHistory();
+  history.push(experience);
+  if (!writeHistory(history)) {
+    window.alert("This moment couldn't be saved. Check your browser's storage settings and try again.");
+    return;
+  }
 
-
-    const experience = {
-
-        date: new Date().toISOString(),
-
-        activity: selectedActivity,
-
-        duration: outsideSeconds,
-
-        energy: ratings.energy,
-
-        mood: ratings.mood,
-
-        difficulty: ratings.difficulty,
-
-        reflection: reflection
-
-    };
-
-
-    // Get existing history
-
-    const history =
-        JSON.parse(
-            localStorage.getItem(
-                "touchgrass_history"
-            )
-        ) || [];
-
-
-    // Add new experience
-
-    history.push(experience);
-
-
-    // Save locally
-
-    localStorage.setItem(
-        "touchgrass_history",
-        JSON.stringify(history)
-    );
-
-
-    showSavedExperience();
-
+  $("missionContent").innerHTML = `
+    <div class="saved-state">
+      <div class="saved-icon" aria-hidden="true">✓</div>
+      <div class="label">MOMENT KEPT</div>
+      <h2>That time was yours.</h2>
+      <p>You spent ${escapeHTML(formatTime(outsideSeconds))} outside. That's worth remembering.</p>
+      <div class="saved-actions">
+        <button id="createAnotherBtn" class="outside-btn" type="button">Make another plan</button>
+        <button id="viewJourneyBtn" class="secondary-btn" type="button">See my journey</button>
+      </div>
+    </div>`;
+  $("createAnotherBtn").addEventListener("click", () => {
+    currentMission = null;
+    $("result").classList.add("hidden");
+    $("outsideBtn").classList.remove("hidden");
+    $("goal").focus();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  });
+  $("viewJourneyBtn").addEventListener("click", showJourney);
+  $("outsideBtn").classList.add("hidden");
 }
-
-// ------------------------------------
-// JOURNEY / HISTORY
-// ------------------------------------
-
-document
-    .getElementById("journeyBtn")
-    .addEventListener(
-        "click",
-        showJourney
-    );
-
-
-document
-    .getElementById("closeJourney")
-    .addEventListener(
-        "click",
-        closeJourney
-    );
-
 
 function showJourney() {
-
-    const journey =
-        document.getElementById("journey");
-
-    const history =
-        JSON.parse(
-            localStorage.getItem(
-                "touchgrass_history"
-            )
-        ) || [];
-
-
-    document
-        .getElementById("missionCount")
-        .textContent = history.length;
-
-
-    const totalSeconds =
-        history.reduce(
-            (total, item) =>
-                total + item.duration,
-            0
-        );
-
-
-    document
-        .getElementById("totalTime")
-        .textContent =
-            formatTotalTime(totalSeconds);
-
-
-    renderHistory(history);
-
-
-    journey.classList.remove("hidden");
-
-    journey.scrollIntoView({
-        behavior: "smooth"
-    });
-
+  const history = readHistory();
+  $("missionCount").textContent = history.length.toLocaleString();
+  const totalSeconds = history.reduce((total, item) => {
+    const seconds = Number(item.duration);
+    return total + (Number.isFinite(seconds) && seconds > 0 ? seconds : 0);
+  }, 0);
+  $("totalTime").textContent = formatTotalTime(totalSeconds);
+  renderHistory(history);
+  $("journey").classList.remove("hidden");
+  $("journey").scrollIntoView({ behavior: "smooth", block: "start" });
 }
-
 
 function closeJourney() {
-
-    document
-        .getElementById("journey")
-        .classList.add("hidden");
-
+  $("journey").classList.add("hidden");
 }
 
-
-function formatTotalTime(seconds) {
-
-    const hours =
-        Math.floor(seconds / 3600);
-
-    const minutes =
-        Math.floor(
-            (seconds % 3600) / 60
-        );
-
-
-    if (hours > 0) {
-
-        return `${hours}h ${minutes}m`;
-
-    }
-
-
-    return `${minutes}m`;
-
-}
+$("journeyBtn").addEventListener("click", showJourney);
+$("closeJourney").addEventListener("click", closeJourney);
 
 function renderHistory(history) {
+  const historyList = $("historyList");
+  if (!history.length) {
+    historyList.innerHTML = `
+      <div class="history-empty">
+        <strong>Your first little adventure starts here.</strong>
+        Finish a mission and your moments will find a home here.
+      </div>`;
+    return;
+  }
 
-    const historyList =
-        document.getElementById(
-            "historyList"
-        );
+  historyList.innerHTML = [...history].reverse().map((item) => {
+    const date = new Date(item.date);
+    const safeDate = Number.isNaN(date.getTime())
+      ? "A day outside"
+      : date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
+    const activity = escapeHTML(item.activity || "Outdoor time");
+    const duration = Number(item.duration);
+    const time = Number.isFinite(duration) && duration >= 0 ? formatTime(duration) : "Time well spent";
+    const reflection = typeof item.reflection === "string" && item.reflection.trim()
+      ? `<p class="history-reflection">“${escapeHTML(item.reflection)}”</p>`
+      : "";
+    const energy = safeRating(item.energy);
+    const mood = safeRating(item.mood);
 
-
-    if (history.length === 0) {
-
-        historyList.innerHTML = `
-
-            <div class="empty-history">
-
-                🌱
-
-                <h3>
-                    No missions yet.
-                </h3>
-
-                <p>
-                    Go outside and start
-                    your first adventure.
-                </p>
-
-            </div>
-
-        `;
-
-        return;
-    }
-
-
-    const sorted =
-        [...history].reverse();
-
-
-    historyList.innerHTML =
-        sorted.map(item => {
-
-            const date =
-                new Date(item.date);
-
-
-            const formattedDate =
-                date.toLocaleDateString(
-                    undefined,
-                    {
-                        month: "short",
-                        day: "numeric"
-                    }
-                );
-
-
-            return `
-
-                <div class="history-card">
-
-                    <div class="history-icon">
-                        ${getActivityIcon(
-                            item.activity
-                        )}
-                    </div>
-
-                    <div class="history-info">
-
-                        <h3>
-                            ${item.activity}
-                        </h3>
-
-                        <p>
-                            ${formatTime(
-                                item.duration
-                            )}
-                            · ${formattedDate}
-                        </p>
-
-                        <div class="history-ratings">
-
-                            Energy
-                            ${stars(item.energy)}
-
-                            &nbsp;&nbsp;
-
-                            Mood
-                            ${stars(item.mood)}
-
-                        </div>
-
-                        ${
-                            item.reflection
-                            ? `
-                            <p class="history-reflection">
-                                "${item.reflection}"
-                            </p>
-                            `
-                            : ""
-                        }
-
-                    </div>
-
-                </div>
-
-            `;
-
-        }).join("");
-
+    return `
+      <article class="history-card">
+        <div class="history-icon" aria-hidden="true">${ACTIVITY_ICONS[item.activity] || "🌿"}</div>
+        <div class="history-info">
+          <h3>${activity}</h3>
+          <p>${escapeHTML(time)} · ${escapeHTML(safeDate)}</p>
+          <div class="history-ratings">Energy ${energy} <span aria-hidden="true">·</span> Mood ${mood}</div>
+          ${reflection}
+        </div>
+      </article>`;
+  }).join("");
 }
 
-
-function getActivityIcon(activity) {
-
-    const icons = {
-
-        Running: "🏃",
-
-        Walking: "🚶",
-
-        Hiking: "🥾",
-
-        Cycling: "🚴"
-
-    };
-
-
-    return icons[activity] || "🌿";
-
+function safeRating(value) {
+  const rating = Number(value);
+  return Number.isInteger(rating) && rating >= 1 && rating <= 5 ? "★".repeat(rating) : "—";
 }
 
-
-function stars(value) {
-
-    if (!value) {
-        return "—";
-    }
-
-
-    return "★".repeat(value) +
-           "☆".repeat(5 - value);
-
+function formatTime(totalSeconds, clock = false) {
+  const seconds = Math.max(0, Math.floor(Number(totalSeconds) || 0));
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  if (clock) return `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
+  if (minutes === 0) return `${remainder} sec`;
+  return remainder ? `${minutes} min ${remainder} sec` : `${minutes} min`;
 }
 
-function formatTime(totalSeconds) {
-
-    const minutes =
-        Math.floor(totalSeconds / 60);
-
-    const seconds =
-        totalSeconds % 60;
-
-
-    if (minutes === 0) {
-        return `${seconds} seconds`;
-    }
-
-    return `${minutes} min ${seconds} sec`;
-
+function formatTotalTime(totalSeconds) {
+  const totalMinutes = Math.floor(Math.max(0, totalSeconds) / 60);
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  return hours ? `${hours}h ${minutes}m` : `${minutes}m`;
 }
 
-// ------------------------------------
-// LOCAL AI INFO
-// ------------------------------------
+function openAIInfo() {
+  $("aiInfoModal").classList.remove("hidden");
+  $("closeAiModal").focus();
+}
+function closeAIInfo() {
+  $("aiInfoModal").classList.add("hidden");
+  $("aiStatus").focus();
+}
+$("aiStatus").addEventListener("click", openAIInfo);
+$("closeAiModal").addEventListener("click", closeAIInfo);
+$("aiInfoModal").addEventListener("click", (event) => {
+  if (event.target === $("aiInfoModal")) closeAIInfo();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !$("aiInfoModal").classList.contains("hidden")) closeAIInfo();
+});
 
-const aiStatus =
-    document.getElementById("aiStatus");
-
-const aiInfoModal =
-    document.getElementById("aiInfoModal");
-
-const closeAiModal =
-    document.getElementById("closeAiModal");
-
-
-aiStatus.addEventListener(
-    "click",
-    () => {
-
-        aiInfoModal.classList.remove(
-            "hidden"
-        );
-
-    }
-);
-
-
-closeAiModal.addEventListener(
-    "click",
-    () => {
-
-        aiInfoModal.classList.add(
-            "hidden"
-        );
-
-    }
-);
-
-
-aiInfoModal.addEventListener(
-    "click",
-    (event) => {
-
-        if (
-            event.target === aiInfoModal
-        ) {
-
-            aiInfoModal.classList.add(
-                "hidden"
-            );
-
-        }
-
-    }
-);
+checkAIHealth();
